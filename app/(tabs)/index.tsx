@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
-import TaskForm from "../../components/TaskForm.jsx";
-import TaskItem from "../../components/TaskItem.jsx";
-import { supabase } from "../../lib/supabase.js";
+import Toast from "react-native-toast-message";
+import AddTaskModal from "../../components/AddTaskModal";
+import TaskForm from "../../components/TaskForm";
+import TaskItem from "../../components/TaskItem";
+import { supabase } from "../../lib/supabase";
 
 type Task = {
   id: string;
@@ -14,6 +16,7 @@ type Task = {
 export default function App() {
   const [task, setTask] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
 
   async function loadTasks() {
     const { data, error } = await supabase
@@ -43,14 +46,35 @@ export default function App() {
     loadTasks();
   }
 
-  async function deleteTask(id: string) {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
-    if (error) return console.log(error.message);
+  async function handleSubmitTask(title: string) {
+    const { error } = await supabase
+      .from("tasks")
+      .insert([{ title, completed: false }]);
+    if (error) {
+      Toast.show({
+        type: "error",
+        text1: "Could not add task",
+        text2: error.message,
+      });
+      return;
+    }
+    setModalVisible(false);
     loadTasks();
+    Toast.show({ type: "success", text1: "Task added" });
   }
 
-  function handleAddTask() {
-    addTask();
+  async function handleDeleteTask(id: string) {
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) {
+      Toast.show({ type: "error", text1: "Could not delete task" });
+      return;
+    }
+    loadTasks();
+    Toast.show({ type: "success", text1: "Task deleted" });
+  }
+
+  function handleOpenModal() {
+    setModalVisible(true);
   }
 
   useEffect(() => {
@@ -62,13 +86,22 @@ export default function App() {
       <View style={headerStyles.header}>
         <Text style={headerStyles.title}>TaskFlow</Text>
       </View>
-      <TaskForm task={task} setTask={setTask} onAdd={handleAddTask} />
+      <TaskForm task={task} setTask={setTask} onAdd={handleOpenModal} />
       <FlatList
         data={tasks}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TaskItem item={item} onToggle={toggleTask} onDelete={deleteTask} />
+          <TaskItem
+            item={item}
+            onToggle={toggleTask}
+            onDelete={handleDeleteTask}
+          />
         )}
+      />
+      <AddTaskModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSubmit={handleSubmitTask}
       />
     </View>
   );
